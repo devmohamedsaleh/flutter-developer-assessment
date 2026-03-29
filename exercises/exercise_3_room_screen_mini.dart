@@ -1,27 +1,4 @@
-// =============================================================================
-// EXERCISE 3: Debugging & Refactoring — "Room Screen Mini"
-// Time: 30 minutes
-// =============================================================================
-//
-// SCENARIO:
-// This is a simplified version of a room screen from a live-streaming app.
-// It was hastily written and contains multiple bugs and anti-patterns.
-//
-// TASK:
-// Find ALL bugs (there are 8), fix each one, and write a 1-line comment
-// explaining why each fix is necessary.
-//
-// HINT: Bugs span categories including state management, memory management,
-// lifecycle handling, performance, and null safety.
-//
-// SCORING:
-// - 2 points per bug found and fixed correctly
-// - 0.5 bonus points per high-quality explanation
-// - Maximum: 20 points
-// =============================================================================
-
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -97,11 +74,17 @@ class RoomEvent extends Equatable {
 class UpdateModeEvent extends RoomEvent {
   final String mode;
   const UpdateModeEvent(this.mode);
+
+  @override
+  List<Object?> get props => [mode];
 }
 
 class AddMessageEvent extends RoomEvent {
   final String message;
   const AddMessageEvent(this.message);
+
+  @override
+  List<Object?> get props => [message];
 }
 
 class RoomBloc extends Bloc<RoomEvent, RoomState> {
@@ -147,15 +130,15 @@ class BannerBloc extends Bloc<BannerEvent, BannerState> {
 }
 
 // ---------------------------------------------------------------------------
-// THE BUGGY SCREEN (find and fix all 8 bugs)
+// FIXED SCREEN
 // ---------------------------------------------------------------------------
 
 class RoomScreenMini extends StatefulWidget {
   final int roomId;
   final bool isLocked;
 
-  // ignore: missing const constructor for now
-  RoomScreenMini({required this.roomId, this.isLocked = false});
+  // FIX #0 (small quality fix): const constructor reduces unnecessary rebuild cost.
+  const RoomScreenMini({super.key, required this.roomId, this.isLocked = false});
 
   @override
   State<RoomScreenMini> createState() => _RoomScreenMiniState();
@@ -163,16 +146,14 @@ class RoomScreenMini extends StatefulWidget {
 
 class _RoomScreenMiniState extends State<RoomScreenMini>
     with WidgetsBindingObserver {
-  // ═══════════════════════════════════════════════════════════════════════════
-  // BUG #7: Static mutable map used as instance state
-  // ═══════════════════════════════════════════════════════════════════════════
-  static Map<String, GlobalKey> seatKeys = {};
-  static Map<int, String> seatUserIds = {};
+  // FIX #7: Instance maps avoid shared mutable state leaking across screen instances.
+  final Map<String, GlobalKey> seatKeys = {};
+  final Map<int, String> seatUserIds = {};
 
   final RoomBloc _roomBloc = RoomBloc();
   final BannerBloc _bannerBloc = BannerBloc();
 
-  final List<StreamSubscription<dynamic>?> _subscriptions = [];
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
   late final ScrollController _chatScrollController;
 
   @override
@@ -187,25 +168,30 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
 
   void _initializeSubscriptions() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
       _subscriptions
-        // ═════════════════════════════════════════════════════════════════════
-        // BUG #3: Empty stream listener — subscription created but does nothing
-        // ═════════════════════════════════════════════════════════════════════
-        ..add(zegoService.getMessageStream().listen((event) {}))
+      // FIX #3: Subscribe to messages and forward them to the bloc so the listener has real effect.
+        ..add(zegoService.getMessageStream().listen((event) {
+          final msg = event['msg'];
+          if (msg is String && msg.isNotEmpty) {
+            _roomBloc.add(AddMessageEvent(msg));
+          }
+        }))
         ..add(zegoService.getCommandStream().listen(_onCommandReceived))
         ..add(zegoService.getUserJoinStream().listen(_onUserJoined));
     });
   }
 
   Future<void> _loadRoomData() async {
-    // Simulate API call
     await Future.delayed(const Duration(seconds: 2));
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BUG #1: setState called after async gap without mounted check
-    // ═══════════════════════════════════════════════════════════════════════════
+    // FIX #1: mounted check prevents calling setState after the widget is disposed.
+    if (!mounted) return;
+
     setState(() {
       seatKeys.clear();
+      seatUserIds.clear();
       for (int i = 0; i < 8; i++) {
         seatKeys['seat_$i'] = GlobalKey();
       }
@@ -219,41 +205,45 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
         case 'mode_change':
           _roomBloc.add(UpdateModeEvent(data['mode'] ?? 'normal'));
           break;
+
         case 'ban_user':
-          // ═════════════════════════════════════════════════════════════════════
-          // BUG #5: Force-unwrap navigator without null check
-          // ═════════════════════════════════════════════════════════════════════
-          Navigator.popUntil(
-            navKey.currentState!.context,
-            (route) => route.isFirst,
-          );
+        // FIX #5: Null-safe navigator access avoids crashing when no navigator state is attached.
+          final navigator = navKey.currentState;
+          if (navigator != null) {
+            navigator.popUntil((route) => route.isFirst);
+          }
           break;
+
         case 'lock_comments':
           _roomBloc.add(const UpdateModeEvent('locked'));
           break;
       }
     } catch (e) {
-      if (kDebugMode) print('Error: $e');
+      if (kDebugMode) {
+        print('Error: $e');
+      }
     }
   }
 
   void _onUserJoined(Map<String, dynamic> data) {
-    _roomBloc.add(AddMessageEvent('${data['user']} joined the room'));
+    final user = data['user'];
+    if (user is String && user.isNotEmpty) {
+      _roomBloc.add(AddMessageEvent('$user joined the room'));
+    }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // BUG #8: Async lifecycle override returning void
-  // ═══════════════════════════════════════════════════════════════════════════
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // FIX #8: Lifecycle override must stay synchronous; async work is delegated to a separate method.
     super.didChangeAppLifecycleState(state);
+    unawaited(_handleLifecycleChange(state));
+  }
 
+  Future<void> _handleLifecycleChange(AppLifecycleState state) async {
     if (state == AppLifecycleState.paused) {
-      // Simulate stopping camera/mic
       await Future.delayed(const Duration(milliseconds: 100));
       debugPrint('Camera stopped');
     } else if (state == AppLifecycleState.resumed) {
-      // Simulate restarting camera/mic
       await Future.delayed(const Duration(milliseconds: 100));
       debugPrint('Camera resumed');
     }
@@ -263,14 +253,11 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BUG #4: Only cancelling first 2 subscriptions, missing the 3rd
-    // ═══════════════════════════════════════════════════════════════════════════
-    if (_subscriptions.length >= 2) {
-      _subscriptions[0]?.cancel();
-      _subscriptions[1]?.cancel();
-      // Missing: _subscriptions[2]?.cancel();
+    // FIX #4: Cancel all subscriptions to prevent leaks and callbacks after dispose.
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
     }
+    _subscriptions.clear();
 
     _chatScrollController.dispose();
     _roomBloc.close();
@@ -283,7 +270,6 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // --- App Bar ---
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
@@ -295,12 +281,10 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
 
           // --- Room Mode Banner ---
           SliverToBoxAdapter(
-            // ═════════════════════════════════════════════════════════════════
-            // BUG #6: BlocBuilder without buildWhen — rebuilds on every state
-            // ═════════════════════════════════════════════════════════════════
             child: BlocBuilder<RoomBloc, RoomState>(
               bloc: _roomBloc,
-              // Missing: buildWhen: (prev, curr) => prev.roomMode != curr.roomMode,
+              // FIX #6: buildWhen limits rebuilds to room mode changes only.
+              buildWhen: (prev, curr) => prev.roomMode != curr.roomMode,
               builder: (context, state) {
                 return Container(
                   padding: const EdgeInsets.all(8),
@@ -314,45 +298,44 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
           ),
 
           // --- Seat Grid ---
-          SliverToBoxAdapter(
-            child: BlocBuilder<RoomBloc, RoomState>(
+          SliverPadding(
+            // FIX #2: Use a sliver grid instead of shrinkWrap GridView inside CustomScrollView to preserve lazy rendering.
+            padding: const EdgeInsets.all(8),
+            sliver: BlocBuilder<RoomBloc, RoomState>(
               bloc: _roomBloc,
-              // Missing buildWhen here too
+              buildWhen: (prev, curr) => prev.seatCount != curr.seatCount,
               builder: (context, state) {
-                return GridView.builder(
-                  // ═══════════════════════════════════════════════════════════
-                  // BUG #2: shrinkWrap inside CustomScrollView — forces all
-                  // children to be laid out at once, defeating lazy rendering
-                  // ═══════════════════════════════════════════════════════════
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
+                return SliverGrid(
+                  delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                      return Container(
+                        key: seatKeys['seat_$index'],
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.person, color: Colors.grey),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Seat ${index + 1}',
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: state.seatCount,
+                  ),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                   ),
-                  itemCount: state.seatCount,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.person, color: Colors.grey),
-                            SizedBox(height: 4),
-                            Text(
-                              'Seat ${index + 1}',
-                              style: TextStyle(fontSize: 10),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
                 );
               },
             ),
@@ -362,14 +345,16 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
           SliverToBoxAdapter(
             child: BlocBuilder<BannerBloc, BannerState>(
               bloc: _bannerBloc,
-              // Missing buildWhen
+              buildWhen: (prev, curr) =>
+              prev.isVisible != curr.isVisible ||
+                  prev.activeBanner != curr.activeBanner,
               builder: (context, state) {
                 if (!state.isVisible) return const SizedBox.shrink();
                 return Container(
                   height: 60,
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [Colors.amber, Colors.orange],
                     ),
                     borderRadius: BorderRadius.circular(8),
@@ -377,7 +362,7 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
                   child: Center(
                     child: Text(
                       state.activeBanner?['text'] ?? 'Special Event!',
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
@@ -392,26 +377,23 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
           SliverToBoxAdapter(
             child: BlocBuilder<RoomBloc, RoomState>(
               bloc: _roomBloc,
-              // Missing buildWhen
+              buildWhen: (prev, curr) => prev.messages != curr.messages,
               builder: (context, state) {
-                return Container(
+                return SizedBox(
                   height: 300,
                   child: ListView.separated(
                     controller: _chatScrollController,
-                    // Performance issue: shrinkWrap not needed here since
-                    // parent container has fixed height, but it's still bad
-                    // practice to leave it (it's not present here though)
                     itemCount: state.messages.length,
-                    separatorBuilder: (_, __) => Divider(height: 1),
+                    separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       return Padding(
-                        padding: EdgeInsets.symmetric(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 4,
                         ),
                         child: Text(
                           state.messages[index],
-                          style: TextStyle(fontSize: 13),
+                          style: const TextStyle(fontSize: 13),
                         ),
                       );
                     },
@@ -422,12 +404,10 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
           ),
         ],
       ),
-
-      // --- Bottom Action Bar ---
       bottomNavigationBar: Container(
         height: 60,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           boxShadow: [
             BoxShadow(
@@ -441,19 +421,19 @@ class _RoomScreenMiniState extends State<RoomScreenMini>
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(
-              icon: Icon(Icons.mic),
+              icon: const Icon(Icons.mic),
               onPressed: () {},
             ),
             IconButton(
-              icon: Icon(Icons.chat_bubble_outline),
+              icon: const Icon(Icons.chat_bubble_outline),
               onPressed: () {},
             ),
             IconButton(
-              icon: Icon(Icons.card_giftcard),
+              icon: const Icon(Icons.card_giftcard),
               onPressed: () {},
             ),
             IconButton(
-              icon: Icon(Icons.more_horiz),
+              icon: const Icon(Icons.more_horiz),
               onPressed: () {},
             ),
           ],

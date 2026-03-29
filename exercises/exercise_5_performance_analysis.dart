@@ -1,643 +1,609 @@
 // =============================================================================
-// EXERCISE 5: Performance Analysis — "Widget Rebuild Audit"
-// Time: 30 minutes
-// =============================================================================
-//
-// SCENARIO:
-// You've been asked to audit the main layout of a live-streaming app for
-// performance issues. The widget tree below is causing dropped frames and
-// excessive rebuilds on mid-range devices.
-//
-// TASKS:
-// 1. [All Levels] Identify all performance issues in the code below
-// 2. [All Levels] Rank each issue by impact: HIGH / MEDIUM / LOW
-// 3. [All Levels] Write the fix for each issue (inline code)
-// 4. [Senior Bonus] Propose migration from static routes map to onGenerateRoute
-// 5. [Senior Bonus] How would you split HomeState (50+ fields) into sub-states?
-//
-// FORMAT:
-// For each issue found, write:
-//   ISSUE #N: [Description]
-//   IMPACT: HIGH / MEDIUM / LOW
-//   WHY: [1-line explanation]
-//   FIX: [Code snippet]
+// YOUR ANALYSIS
 // =============================================================================
 
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:equatable/equatable.dart';
-
-// ---------------------------------------------------------------------------
-// MOCK TYPES (do not modify)
-// ---------------------------------------------------------------------------
-
-final di = _MockDI();
-class _MockDI { T call<T>() => throw UnimplementedError(); }
-
-// Mock BLoCs
-class FetchUserDataState extends Equatable {
-  final Map<String, dynamic>? bannerData;
-  final dynamic userEntity;
-  final bool isOnline;
-  final int unreadCount;
-  final String? walletBalance;
-
-  const FetchUserDataState({
-    this.bannerData,
-    this.userEntity,
-    this.isOnline = false,
-    this.unreadCount = 0,
-    this.walletBalance,
-  });
-
-  @override
-  List<Object?> get props =>
-      [bannerData, userEntity, isOnline, unreadCount, walletBalance];
-}
-
-class FetchUserDataEvent {}
-class FetchUserDataBloc extends Bloc<FetchUserDataEvent, FetchUserDataState> {
-  FetchUserDataBloc() : super(const FetchUserDataState());
-}
-
-class LayoutState extends Equatable {
-  final int currentIndex;
-  final bool showBanner;
-  const LayoutState({this.currentIndex = 0, this.showBanner = false});
-  @override
-  List<Object?> get props => [currentIndex, showBanner];
-}
-
-class LayoutEvent {}
-class LayoutBloc extends Bloc<LayoutEvent, LayoutState> {
-  LayoutBloc() : super(const LayoutState());
-}
-
-class HomeState extends Equatable {
-  // This state has 50+ fields in the real codebase
-  final int currentTabIndex;
-  final List<dynamic> popularRooms;
-  final List<dynamic> liveRooms;
-  final List<dynamic> followRooms;
-  final List<dynamic> friendsRooms;
-  final List<dynamic> lastCreateRooms;
-  final List<dynamic> filteredRooms;
-  final List<dynamic> globalRooms;
-  final int popularCurrentPage;
-  final int liveCurrentPage;
-  final int globalCurrentPage;
-  final int followCurrentPage;
-  final int friendsCurrentPage;
-  // ... imagine 35+ more fields
-
-  const HomeState({
-    this.currentTabIndex = 0,
-    this.popularRooms = const [],
-    this.liveRooms = const [],
-    this.followRooms = const [],
-    this.friendsRooms = const [],
-    this.lastCreateRooms = const [],
-    this.filteredRooms = const [],
-    this.globalRooms = const [],
-    this.popularCurrentPage = 1,
-    this.liveCurrentPage = 1,
-    this.globalCurrentPage = 1,
-    this.followCurrentPage = 1,
-    this.friendsCurrentPage = 1,
-  });
-
-  @override
-  List<Object?> get props => [
-        currentTabIndex, popularRooms, liveRooms, followRooms,
-        friendsRooms, lastCreateRooms, filteredRooms, globalRooms,
-        popularCurrentPage, liveCurrentPage, globalCurrentPage,
-        followCurrentPage, friendsCurrentPage,
-      ];
-}
-
-class HomeEvent {}
-class HomeBloc extends Bloc<HomeEvent, HomeState> {
-  HomeBloc() : super(const HomeState());
-}
-
-// Mock pages
-class SplashPage extends StatelessWidget {
-  const SplashPage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class LoginPage extends StatelessWidget {
-  const LoginPage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class RegisterPage extends StatelessWidget {
-  const RegisterPage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class RoomPage extends StatelessWidget {
-  const RoomPage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class ChatPage extends StatelessWidget {
-  const ChatPage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class SearchPage extends StatelessWidget {
-  const SearchPage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class ReelsPage extends StatelessWidget {
-  const ReelsPage({super.key});
-  @override Widget build(BuildContext context) => const Placeholder();
-}
-class SplashBloc extends Bloc<dynamic, dynamic> { SplashBloc() : super(null); }
-class ConfigAppBloc extends Bloc<dynamic, dynamic> { ConfigAppBloc() : super(null); }
-class ColorsBloc extends Bloc<dynamic, dynamic> { ColorsBloc() : super(null); }
-class LoginBloc extends Bloc<dynamic, dynamic> { LoginBloc() : super(null); }
-class RegisterBloc extends Bloc<dynamic, dynamic> { RegisterBloc() : super(null); }
-class SearchBloc extends Bloc<dynamic, dynamic> { SearchBloc() : super(null); }
-class ReelsBloc extends Bloc<dynamic, dynamic> { ReelsBloc() : super(null); }
-class ChatBloc extends Bloc<dynamic, dynamic> { ChatBloc() : super(null); }
-class RoomBloc extends Bloc<dynamic, dynamic> { RoomBloc() : super(null); }
-class ProfileBloc extends Bloc<dynamic, dynamic> { ProfileBloc() : super(null); }
-
-// Mock SVGA widget (heavy animation renderer)
-class ShowSVGA extends StatelessWidget {
-  final String svgaAssetPath;
-  final bool isNeedToRepeat;
-  final double height;
-  final double width;
-
-  const ShowSVGA({
-    super.key,
-    required this.svgaAssetPath,
-    this.isNeedToRepeat = false,
-    this.height = 35,
-    this.width = 35,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // In real app: loads SVGA binary, creates custom painter,
-    // renders animation frames using a ticker
-    return SizedBox(height: height, width: width, child: const Placeholder());
-  }
-}
-
-// ---------------------------------------------------------------------------
-// PERFORMANCE ISSUES TO FIND (audit this code)
-// ---------------------------------------------------------------------------
-
-/// ════════════════════════════════════════════════════════════════════════════
-/// AREA 1: Main Layout — Widget Rebuild Hotspot
-/// ════════════════════════════════════════════════════════════════════════════
-
+// ISSUE #1:
+// Root StreamBuilder rebuilds the whole MainLayout every 30 seconds.
+// IMPACT: HIGH
+// WHY: Rebuilding the full Stack, banners, layout body, counters, and wallet
+// layer on a periodic timer causes unnecessary work and dropped frames.
+// FIX:
+/*
 class MainLayout extends StatelessWidget {
   const MainLayout({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // StreamBuilder at root — rebuilds everything on stream events
-    return StreamBuilder<bool>(
-      stream: Stream.periodic(const Duration(seconds: 30), (_) => true),
-      builder: (context, snapshot) {
-        return Stack(
-          children: [
-            // --- Banner Layer 1: Gift Banner ---
-            // ISSUE: BlocBuilder without buildWhen
-            BlocBuilder<FetchUserDataBloc, FetchUserDataState>(
-              bloc: di<FetchUserDataBloc>(),
-              builder: (_, state) {
-                final data = state.bannerData?["gift"];
-                if (data == null) return SizedBox();
-                return Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 80,
-                    color: Colors.amber.withOpacity(0.9),
-                    child: Center(child: Text('Gift Banner')),
-                  ),
-                );
-              },
-            ),
-
-            // --- Banner Layer 2: Game Banner ---
-            // ISSUE: ANOTHER BlocBuilder on same BLoC, no buildWhen
-            BlocBuilder<FetchUserDataBloc, FetchUserDataState>(
-              bloc: di<FetchUserDataBloc>(),
-              builder: (_, state) {
-                final data = state.bannerData?["game"];
-                if (data == null) return SizedBox();
-                return Positioned(
-                  top: 80,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 60,
-                    color: Colors.blue.withOpacity(0.9),
-                    child: Center(child: Text('Game Banner')),
-                  ),
-                );
-              },
-            ),
-
-            // --- Banner Layer 3: Lucky Banner ---
-            // ISSUE: Yet another BlocBuilder on same BLoC
-            BlocBuilder<FetchUserDataBloc, FetchUserDataState>(
-              bloc: di<FetchUserDataBloc>(),
-              builder: (_, state) {
-                final data = state.bannerData?["lucky"];
-                if (data == null) return SizedBox();
-                return Positioned(
-                  bottom: 100,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 60,
-                    color: Colors.green.withOpacity(0.9),
-                    child: Center(child: Text('Lucky Banner')),
-                  ),
-                );
-              },
-            ),
-
-            // --- Online Badge ---
-            // ISSUE: BlocBuilder for single boolean, no buildWhen
-            BlocBuilder<FetchUserDataBloc, FetchUserDataState>(
-              bloc: di<FetchUserDataBloc>(),
-              builder: (_, state) {
-                if (!state.isOnline) return SizedBox();
-                return Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                );
-              },
-            ),
-
-            // --- Layout Body ---
-            BlocBuilder<LayoutBloc, LayoutState>(
-              bloc: di<LayoutBloc>(),
-              // ISSUE: No buildWhen
-              builder: (context, layoutState) {
-                return IndexedStack(
-                  index: layoutState.currentIndex,
-                  children: [
-                    _buildHomePage(),
-                    ChatPage(),
-                    ProfilePage(),
-                    SettingsPage(),
-                  ],
-                );
-              },
-            ),
-
-            // --- Unread Counter ---
-            // ISSUE: Two nested BlocBuilders, no buildWhen on either
-            BlocBuilder<FetchUserDataBloc, FetchUserDataState>(
-              bloc: di<FetchUserDataBloc>(),
-              builder: (_, userState) {
-                return BlocBuilder<LayoutBloc, LayoutState>(
-                  bloc: di<LayoutBloc>(),
-                  builder: (_, layoutState) {
-                    if (layoutState.currentIndex != 1) return SizedBox();
-                    return Positioned(
-                      bottom: 70,
-                      right: 20,
-                      child: Container(
-                        padding: EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '${userState.unreadCount}',
-                          style: TextStyle(color: Colors.white, fontSize: 10),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-
-            // --- Wallet Display ---
-            ValueListenableBuilder<String>(
-              valueListenable: ValueNotifier<String>('0'),
-              builder: (_, value, __) {
-                return Positioned(
-                  top: 50,
-                  right: 10,
-                  child: Text('💰 $value'),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildHomePage() {
-    // ISSUE: BlocBuilder wraps ENTIRE TabBarView
-    return BlocBuilder<HomeBloc, HomeState>(
-      bloc: di<HomeBloc>(),
-      // No buildWhen — rebuilds ALL tabs when ANY HomeState field changes
-      builder: (context, state) {
-        return Column(
-          children: [
-            // Tab bar
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                TextButton(
-                  onPressed: () {},
-                  child: Text('Popular',
-                      style: TextStyle(
-                        fontWeight: state.currentTabIndex == 0
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      )),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: Text('Live'),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: Text('Following'),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: Text('Friends'),
-                ),
-              ],
-            ),
-            // Tab content — ALL tabs rebuild when any state changes
-            Expanded(
-              child: IndexedStack(
-                index: state.currentTabIndex,
-                children: [
-                  // Each of these rebuilds even when only popularRooms changed
-                  ListView.builder(
-                    itemCount: state.popularRooms.length,
-                    itemBuilder: (_, i) => ListTile(title: Text('Popular $i')),
-                  ),
-                  ListView.builder(
-                    itemCount: state.liveRooms.length,
-                    itemBuilder: (_, i) => ListTile(title: Text('Live $i')),
-                  ),
-                  ListView.builder(
-                    itemCount: state.followRooms.length,
-                    itemBuilder: (_, i) => ListTile(title: Text('Following $i')),
-                  ),
-                  ListView.builder(
-                    itemCount: state.friendsRooms.length,
-                    itemBuilder: (_, i) => ListTile(title: Text('Friends $i')),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-    );
+    return const _MainLayoutContent();
   }
 }
 
-/// ════════════════════════════════════════════════════════════════════════════
-/// AREA 2: Bottom Navigation — Heavy Animation Usage
-/// ════════════════════════════════════════════════════════════════════════════
-
-class AppBottomNavBar extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-
-  const AppBottomNavBar({
-    super.key,
-    required this.currentIndex,
-    required this.onTap,
-  });
+class _MainLayoutContent extends StatelessWidget {
+  const _MainLayoutContent();
 
   @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      onTap: onTap,
-      type: BottomNavigationBarType.fixed,
-      items: [
-        BottomNavigationBarItem(
-          // ISSUE: SVGA animation for simple tab icon — heavy CPU/memory
-          icon: Image.asset('assets/icons/home.png', height: 28, width: 28),
-          activeIcon: ShowSVGA(
-            svgaAssetPath: 'assets/svga/home_active.svga',
-            isNeedToRepeat: false,
-            height: 35,
-            width: 35,
-          ),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
-          icon: Image.asset('assets/icons/chat.png', height: 28, width: 28),
-          activeIcon: ShowSVGA(
-            svgaAssetPath: 'assets/svga/chat_active.svga',
-            isNeedToRepeat: false,
-            height: 35,
-            width: 35,
-          ),
-          label: 'Chat',
-        ),
-        BottomNavigationBarItem(
-          icon: Image.asset('assets/icons/profile.png', height: 28, width: 28),
-          activeIcon: ShowSVGA(
-            svgaAssetPath: 'assets/svga/profile_active.svga',
-            isNeedToRepeat: false,
-            height: 35,
-            width: 35,
-          ),
-          label: 'Profile',
-        ),
-        BottomNavigationBarItem(
-          icon: Image.asset('assets/icons/settings.png', height: 28, width: 28),
-          activeIcon: ShowSVGA(
-            svgaAssetPath: 'assets/svga/settings_active.svga',
-            isNeedToRepeat: false,
-            height: 35,
-            width: 35,
-          ),
-          label: 'Settings',
-        ),
+    return Stack(
+      children: const [
+        GiftBannerLayer(),
+        GameBannerLayer(),
+        LuckyBannerLayer(),
+        OnlineBadgeLayer(),
+        LayoutBodyLayer(),
+        UnreadCounterLayer(),
+        WalletDisplayLayer(),
       ],
     );
   }
 }
+*/
+// If the timer is needed, move it to a tiny isolated widget or cubit instead
+// of rebuilding the whole screen.
 
-/// ════════════════════════════════════════════════════════════════════════════
-/// AREA 3: Static Routes Map
-/// ════════════════════════════════════════════════════════════════════════════
 
-class Routes {
-  static const splash = '/';
-  static const login = '/login';
-  static const register = '/register';
-  static const home = '/home';
-  static const profile = '/profile';
-  static const settings = '/settings';
-  static const room = '/room';
-  static const chat = '/chat';
-  static const search = '/search';
-  static const reels = '/reels';
-
-  // ISSUE: Static map holds all route closures in memory permanently.
-  // Each closure captures the DI container and BlocProvider creation.
-  static Map<String, Widget Function(BuildContext)> routes = {
-    splash: (context) {
-      return MultiBlocProvider(
-        providers: [
-          BlocProvider.value(value: di<SplashBloc>()),
-          BlocProvider.value(value: di<ConfigAppBloc>()),
-          BlocProvider.value(value: di<ColorsBloc>()),
-        ],
-        child: SplashPage(),
-      );
-    },
-    login: (context) {
-      return BlocProvider.value(
-        value: di<LoginBloc>(),
-        child: LoginPage(),
-      );
-    },
-    register: (context) {
-      return BlocProvider.value(
-        value: di<RegisterBloc>(),
-        child: RegisterPage(),
-      );
-    },
-    home: (context) {
-      return MultiBlocProvider(
-        providers: [
-          BlocProvider.value(value: di<HomeBloc>()),
-          BlocProvider.value(value: di<FetchUserDataBloc>()),
-        ],
-        child: HomePage(),
-      );
-    },
-    profile: (context) {
-      return BlocProvider.value(
-        value: di<ProfileBloc>(),
-        child: ProfilePage(),
-      );
-    },
-    settings: (context) {
-      return SettingsPage();
-    },
-    room: (context) {
-      return MultiBlocProvider(
-        providers: [
-          BlocProvider.value(value: di<RoomBloc>()),
-          BlocProvider.value(value: di<FetchUserDataBloc>()),
-        ],
-        child: RoomPage(),
-      );
-    },
-    chat: (context) {
-      return BlocProvider.value(
-        value: di<ChatBloc>(),
-        child: ChatPage(),
-      );
-    },
-    search: (context) {
-      return BlocProvider.value(
-        value: di<SearchBloc>(),
-        child: SearchPage(),
-      );
-    },
-    reels: (context) {
-      return BlocProvider.value(
-        value: di<ReelsBloc>(),
-        child: ReelsPage(),
-      );
-    },
-    // In the real app, there are 100+ more routes here...
-  };
-}
-
-/// ════════════════════════════════════════════════════════════════════════════
-/// AREA 4: Miscellaneous Anti-patterns
-/// ════════════════════════════════════════════════════════════════════════════
-
-class MiscIssues {
-  // ISSUE: ValueNotifier set twice in immediate succession — first value is wasted
-  static ValueNotifier<bool> isKeepInRoom = ValueNotifier<bool>(false);
-
-  static void onExitRoom() {
-    isKeepInRoom.value = true;
-    isKeepInRoom.value = false; // Immediately overwrites previous assignment
-  }
-
-  // ISSUE: Missing const on widgets that could be const
-  static Widget buildDivider() {
-    return SizedBox(height: 1); // Should be: const SizedBox(height: 1)
-  }
-
-  static Widget buildSpacer() {
-    return Spacer(); // Should be: const Spacer()
-  }
-
-  static Widget buildEmpty() {
-    return SizedBox.shrink(); // Should be: const SizedBox.shrink()
-  }
-}
-
-// =============================================================================
-// YOUR ANALYSIS
-// =============================================================================
-
-// List all issues found below:
-//
-// ISSUE #1:
-// IMPACT:
-// WHY:
-// FIX:
-//
 // ISSUE #2:
-// IMPACT:
-// WHY:
+// Three separate BlocBuilders listen to FetchUserDataBloc for bannerData.
+// IMPACT: HIGH
+// WHY: All three banner widgets rebuild on every FetchUserDataState change even
+// when unrelated fields like unreadCount or isOnline change.
 // FIX:
-//
-// (continue for all issues found...)
-//
-//
+/*
+class BannerOverlays extends StatelessWidget {
+  const BannerOverlays({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<FetchUserDataBloc, FetchUserDataState, Map<String, dynamic>?>(
+      bloc: di<FetchUserDataBloc>(),
+      selector: (state) => state.bannerData,
+      builder: (_, bannerData) {
+        final gift = bannerData?['gift'];
+        final game = bannerData?['game'];
+        final lucky = bannerData?['lucky'];
+
+        return Stack(
+          children: [
+            if (gift != null)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _GiftBanner(),
+              ),
+            if (game != null)
+              Positioned(
+                top: 80,
+                left: 0,
+                right: 0,
+                child: _GameBanner(),
+              ),
+            if (lucky != null)
+              Positioned(
+                bottom: 100,
+                left: 0,
+                right: 0,
+                child: _LuckyBanner(),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+*/
+
+
+// ISSUE #3:
+// Online badge uses BlocBuilder without buildWhen for a single boolean.
+// IMPACT: MEDIUM
+// WHY: The badge rebuilds for every user state change although it only depends
+// on isOnline.
+// FIX:
+/*
+BlocSelector<FetchUserDataBloc, FetchUserDataState, bool>(
+  bloc: di<FetchUserDataBloc>(),
+  selector: (state) => state.isOnline,
+  builder: (_, isOnline) {
+    if (!isOnline) return const SizedBox.shrink();
+    return const Positioned(
+      top: 10,
+      right: 10,
+      child: _OnlineBadge(),
+    );
+  },
+)
+*/
+
+
+// ISSUE #4:
+// Layout body BlocBuilder has no buildWhen.
+// IMPACT: MEDIUM
+// WHY: IndexedStack rebuilds whenever any LayoutState field changes, even if
+// currentIndex did not change.
+// FIX:
+/*
+BlocBuilder<LayoutBloc, LayoutState>(
+  bloc: di<LayoutBloc>(),
+  buildWhen: (prev, curr) => prev.currentIndex != curr.currentIndex,
+  builder: (context, layoutState) {
+    return IndexedStack(
+      index: layoutState.currentIndex,
+      children: const [
+        HomeTabShell(),
+        ChatPage(),
+        ProfilePage(),
+        SettingsPage(),
+      ],
+    );
+  },
+)
+*/
+
+
+// ISSUE #5:
+// Nested BlocBuilders for unread counter cause double rebuilds.
+// IMPACT: HIGH
+// WHY: The widget rebuilds when either user state or layout state changes, and
+// nesting increases unnecessary rebuild propagation.
+// FIX:
+/*
+class UnreadCounterLayer extends StatelessWidget {
+  const UnreadCounterLayer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<LayoutBloc, LayoutState, int>(
+      bloc: di<LayoutBloc>(),
+      selector: (state) => state.currentIndex,
+      builder: (_, currentIndex) {
+        if (currentIndex != 1) return const SizedBox.shrink();
+
+        return BlocSelector<FetchUserDataBloc, FetchUserDataState, int>(
+          bloc: di<FetchUserDataBloc>(),
+          selector: (state) => state.unreadCount,
+          builder: (_, unreadCount) {
+            return Positioned(
+              bottom: 70,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$unreadCount',
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+*/
+
+
+// ISSUE #6:
+// Wallet display creates a new ValueNotifier inside build.
+// IMPACT: HIGH
+// WHY: A new notifier is allocated every rebuild, resetting state and wasting
+// memory/work.
+// FIX:
+/*
+class WalletDisplayLayer extends StatefulWidget {
+  const WalletDisplayLayer({super.key});
+
+  @override
+  State<WalletDisplayLayer> createState() => _WalletDisplayLayerState();
+}
+
+class _WalletDisplayLayerState extends State<WalletDisplayLayer> {
+  late final ValueNotifier<String> walletNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    walletNotifier = ValueNotifier<String>('0');
+  }
+
+  @override
+  void dispose() {
+    walletNotifier.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String>(
+      valueListenable: walletNotifier,
+      builder: (_, value, __) {
+        return Positioned(
+          top: 50,
+          right: 10,
+          child: Text('💰 $value'),
+        );
+      },
+    );
+  }
+}
+*/
+// Better yet, derive wallet balance directly from bloc state with BlocSelector.
+
+
+// ISSUE #7:
+// _buildHomePage wraps the entire tab area with one HomeBloc builder.
+// IMPACT: HIGH
+// WHY: Any HomeState change rebuilds the whole tab bar and all tab contents.
+// FIX:
+/*
+class HomeTabShell extends StatelessWidget {
+  const HomeTabShell({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: const [
+        HomeTabsHeader(),
+        Expanded(child: HomeTabsBody()),
+      ],
+    );
+  }
+}
+*/
+
+
+// ISSUE #8:
+// Home tab header rebuilds for all HomeState field changes.
+// IMPACT: MEDIUM
+// WHY: The tab bar only needs currentTabIndex, but it rebuilds when room lists,
+// pages, and unrelated fields change.
+// FIX:
+/*
+class HomeTabsHeader extends StatelessWidget {
+  const HomeTabsHeader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<HomeBloc, HomeState, int>(
+      bloc: di<HomeBloc>(),
+      selector: (state) => state.currentTabIndex,
+      builder: (_, currentTabIndex) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            TextButton(
+              onPressed: () {},
+              child: Text(
+                'Popular',
+                style: TextStyle(
+                  fontWeight: currentTabIndex == 0
+                      ? FontWeight.bold
+                      : FontWeight.normal,
+                ),
+              ),
+            ),
+            const TextButton(onPressed: null, child: Text('Live')),
+            const TextButton(onPressed: null, child: Text('Following')),
+            const TextButton(onPressed: null, child: Text('Friends')),
+          ],
+        );
+      },
+    );
+  }
+}
+*/
+
+
+// ISSUE #9:
+// IndexedStack body rebuilds all tab children when any HomeState field changes.
+// IMPACT: HIGH
+// WHY: Popular/live/following/friends lists are all recreated even if only one
+// list changes.
+// FIX:
+/*
+class HomeTabsBody extends StatelessWidget {
+  const HomeTabsBody({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<HomeBloc, HomeState, int>(
+      bloc: di<HomeBloc>(),
+      selector: (state) => state.currentTabIndex,
+      builder: (_, currentTabIndex) {
+        return IndexedStack(
+          index: currentTabIndex,
+          children: const [
+            PopularRoomsTab(),
+            LiveRoomsTab(),
+            FollowingRoomsTab(),
+            FriendsRoomsTab(),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class PopularRoomsTab extends StatelessWidget {
+  const PopularRoomsTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<HomeBloc, HomeState, List<dynamic>>(
+      bloc: di<HomeBloc>(),
+      selector: (state) => state.popularRooms,
+      builder: (_, rooms) {
+        return ListView.builder(
+          itemCount: rooms.length,
+          itemBuilder: (_, i) => ListTile(title: Text('Popular $i')),
+        );
+      },
+    );
+  }
+}
+*/
+// Apply the same pattern for LiveRoomsTab, FollowingRoomsTab, FriendsRoomsTab.
+
+
+// ISSUE #10:
+// BottomNavigationBar active icons use SVGA for simple tab states.
+// IMPACT: HIGH
+// WHY: SVGA animation rendering is expensive for something that changes only on
+// tab selection; it increases CPU/GPU work and memory pressure.
+// FIX:
+/*
+BottomNavigationBarItem(
+  icon: const Icon(Icons.home_outlined),
+  activeIcon: const Icon(Icons.home),
+  label: 'Home',
+)
+*/
+// If branding requires richer visuals, use a lightweight animated scale/fade
+// with AnimatedSwitcher instead of SVGA.
+
+
+// ISSUE #11:
+// Static routes map keeps all route closures alive permanently.
+// IMPACT: MEDIUM
+// WHY: A large routes map with 100+ closures increases memory retention and
+// keeps route construction logic centralized and less scalable.
+// FIX:
+// Migrate to onGenerateRoute (see senior bonus below).
+
+
+// ISSUE #12:
+// Repeated immediate ValueNotifier writes in onExitRoom.
+// IMPACT: LOW
+// WHY: The first assignment is overwritten instantly, causing pointless notifier
+// emissions and wasted rebuilds.
+// FIX:
+/*
+static void onExitRoom() {
+  isKeepInRoom.value = false;
+}
+*/
+// Or decide the correct final value once before notifying listeners.
+
+
+// ISSUE #13:
+// Missing const on simple widgets like SizedBox, Spacer, SizedBox.shrink.
+// IMPACT: LOW
+// WHY: Non-const widgets are recreated unnecessarily and miss Flutter's const
+// canonicalization optimizations.
+// FIX:
+/*
+static Widget buildDivider() => const SizedBox(height: 1);
+static Widget buildSpacer() => const Spacer();
+static Widget buildEmpty() => const SizedBox.shrink();
+*/
+
+
+// ISSUE #14:
+// Returning plain SizedBox() instead of const SizedBox.shrink() in multiple places.
+// IMPACT: LOW
+// WHY: It creates unnecessary objects and is less explicit than a zero-size
+// constant widget.
+// FIX:
+/*
+if (data == null) return const SizedBox.shrink();
+if (!state.isOnline) return const SizedBox.shrink();
+if (layoutState.currentIndex != 1) return const SizedBox.shrink();
+*/
+
+
+// ISSUE #15:
+// Using di<T>() repeatedly inside build methods.
+// IMPACT: MEDIUM
+// WHY: Repeated service locator lookups in build reduce clarity and may hide
+// lifecycle problems; dependencies should be resolved once closer to ownership.
+// FIX:
+/*
+class MainLayout extends StatelessWidget {
+  const MainLayout({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final fetchUserDataBloc = di<FetchUserDataBloc>();
+    final layoutBloc = di<LayoutBloc>();
+    final homeBloc = di<HomeBloc>();
+
+    return _MainLayoutContent(
+      fetchUserDataBloc: fetchUserDataBloc,
+      layoutBloc: layoutBloc,
+      homeBloc: homeBloc,
+    );
+  }
+}
+*/
+
+
+// =============================================================================
 // SENIOR BONUS #1: onGenerateRoute migration
-// -------------------------------------------
-// Write the onGenerateRoute method that replaces the static routes map:
-//
-//
-//
+// =============================================================================
+
+/*
+class AppRouter {
+  static Route<dynamic> onGenerateRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case Routes.splash:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: di<SplashBloc>()),
+              BlocProvider.value(value: di<ConfigAppBloc>()),
+              BlocProvider.value(value: di<ColorsBloc>()),
+            ],
+            child: const SplashPage(),
+          ),
+        );
+
+      case Routes.login:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => BlocProvider.value(
+            value: di<LoginBloc>(),
+            child: const LoginPage(),
+          ),
+        );
+
+      case Routes.register:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => BlocProvider.value(
+            value: di<RegisterBloc>(),
+            child: const RegisterPage(),
+          ),
+        );
+
+      case Routes.home:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: di<HomeBloc>()),
+              BlocProvider.value(value: di<FetchUserDataBloc>()),
+            ],
+            child: const HomePage(),
+          ),
+        );
+
+      case Routes.profile:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => BlocProvider.value(
+            value: di<ProfileBloc>(),
+            child: const ProfilePage(),
+          ),
+        );
+
+      case Routes.settings:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const SettingsPage(),
+        );
+
+      case Routes.room:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: di<RoomBloc>()),
+              BlocProvider.value(value: di<FetchUserDataBloc>()),
+            ],
+            child: const RoomPage(),
+          ),
+        );
+
+      case Routes.chat:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => BlocProvider.value(
+            value: di<ChatBloc>(),
+            child: const ChatPage(),
+          ),
+        );
+
+      case Routes.search:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => BlocProvider.value(
+            value: di<SearchBloc>(),
+            child: const SearchPage(),
+          ),
+        );
+
+      case Routes.reels:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => BlocProvider.value(
+            value: di<ReelsBloc>(),
+            child: const ReelsPage(),
+          ),
+        );
+
+      default:
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => const Scaffold(
+            body: Center(child: Text('Route not found')),
+          ),
+        );
+    }
+  }
+}
+*/
+
+
+// =============================================================================
 // SENIOR BONUS #2: HomeState split proposal
-// -------------------------------------------
-// How would you split the 50+ field HomeState into focused sub-states?
-// List the new states and what fields each would contain:
+// =============================================================================
+
+// I would split HomeState into smaller focused sub-states:
 //
+// 1. HomeNavigationState
+//    - currentTabIndex
 //
+// 2. PopularRoomsState
+//    - popularRooms
+//    - popularCurrentPage
+//    - popular loading/error/hasMore fields
 //
+// 3. LiveRoomsState
+//    - liveRooms
+//    - liveCurrentPage
+//    - live loading/error/hasMore fields
+//
+// 4. FollowingRoomsState
+//    - followRooms
+//    - followCurrentPage
+//    - follow loading/error/hasMore fields
+//
+// 5. FriendsRoomsState
+//    - friendsRooms
+//    - friendsCurrentPage
+//    - friends loading/error/hasMore fields
+//
+// 6. GlobalRoomsState
+//    - globalRooms
+//    - globalCurrentPage
+//    - global loading/error/hasMore fields
+//
+// 7. FilteredRoomsState
+//    - filteredRooms
+//    - active filters
+//    - filtered loading/error fields
+//
+// 8. LastCreatedRoomsState
+//    - lastCreateRooms
+//    - loading/error fields
+//
+// Then compose them using either:
+// - multiple feature cubits/blocs, one per tab/data source
+// - or a parent HomeScreenCoordinator that reads smaller blocs
+//
+// This reduces rebuild scope, improves testability, and makes pagination logic
+// independent per tab instead of coupling everything into one large state object.

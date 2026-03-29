@@ -1,31 +1,4 @@
-// =============================================================================
-// EXERCISE 2: State Management — "Paginated Room List with BLoC"
-// Time: 40 minutes
-// =============================================================================
-//
-// SCENARIO:
-// You're working on a social/live-streaming app that displays rooms in a
-// paginated list. The architecture uses Clean Architecture with BLoC for state
-// management and dartz Either for error handling.
-//
-// The base architecture is provided below. Your job is to fix bugs in the
-// existing BLoC and complete the missing functionality.
-//
-// TASKS:
-// 1. [All Levels] Fix the bugs in RoomListBloc._onFetchRooms
-// 2. [All Levels] Implement the LoadMoreRoomsEvent handler (pagination)
-// 3. [Mid+] Add buildWhen to the BlocBuilder in RoomListPage
-// 4. [Mid+] Implement infinite scroll using handleScrollListener
-// 5. [Mid+] Find and fix the subtle bug in RoomListState.copyWith
-// 6. [Senior] Review FetchAllDataBloc at the bottom — identify the anti-pattern
-//    and propose a refactored architecture (written answer, no code required)
-//
-// RULES:
-// - Do not modify the base classes (RequestState, UseCaseWithParams, etc.)
-// - You may add new events, modify state, and fix the BLoC implementation
-// - Consider error handling, edge cases, and performance
-// =============================================================================
-
+import 'package:dartz/dartz.dart';
 import 'package:flutter/material.dart';
 import 'package:equatable/equatable.dart';
 import 'package:dartz/dartz.dart';
@@ -35,13 +8,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 // BASE ARCHITECTURE (do not modify)
 // ---------------------------------------------------------------------------
 
-/// Request state enum for tracking async operations
 enum RequestState { idle, loading, loaded, error, offline, empty }
 
-/// Type aliases for Either-based error handling
 typedef ResultFuture<T> = Future<Either<NetworkExceptions, T>>;
 
-/// Base class for network exceptions
 class NetworkExceptions {
   const NetworkExceptions();
 
@@ -71,7 +41,6 @@ class BadRequest extends NetworkExceptions {
   const BadRequest(this.message);
 }
 
-/// Wrapper that converts futures to Either types
 ResultFuture<T> execute<T>(Future<T> Function() fun) async {
   try {
     final result = await fun();
@@ -81,13 +50,11 @@ ResultFuture<T> execute<T>(Future<T> Function() fun) async {
   }
 }
 
-/// Base use case with parameters
 abstract class UseCaseWithParams<T, Params> {
   const UseCaseWithParams();
   ResultFuture<T> call(Params params);
 }
 
-/// Paginated response wrapper
 class BaseResponse<T> {
   final T? data;
   final PaginationMeta? paginates;
@@ -107,14 +74,12 @@ class PaginationMeta {
   });
 }
 
-/// Helper: Convert NetworkExceptions to RequestState
 RequestState handleErrorResponse(NetworkExceptions error) {
   return error is NoInternetConnection
       ? RequestState.offline
       : RequestState.error;
 }
 
-/// Helper: Determine loaded vs empty state
 RequestState handleLoadedResponse<T>(T? result) {
   if (result is List) {
     return result.isEmpty ? RequestState.empty : RequestState.loaded;
@@ -122,7 +87,6 @@ RequestState handleLoadedResponse<T>(T? result) {
   return RequestState.loaded;
 }
 
-/// Helper: Merge paginated results
 List<T> handlePaginationResponse<T>({
   required List<T>? result,
   required List<T> currentList,
@@ -138,7 +102,6 @@ List<T> handlePaginationResponse<T>({
   }
 }
 
-/// Helper: Attach scroll listener for pagination
 void handleScrollListener({
   required ScrollController controller,
   required Function() fun,
@@ -184,11 +147,10 @@ class FetchRoomsUseCase
     extends UseCaseWithParams<BaseResponse<List<RoomEntity>>, RoomParams> {
   @override
   ResultFuture<BaseResponse<List<RoomEntity>>> call(RoomParams params) async {
-    // Simulated API call - returns mock data
     await Future.delayed(const Duration(seconds: 1));
     final rooms = List.generate(
       20,
-      (i) => RoomEntity(
+          (i) => RoomEntity(
         id: (params.page - 1) * 20 + i,
         roomName: 'Room ${(params.page - 1) * 20 + i}',
         visitorsCount: (i + 1) * 10,
@@ -207,7 +169,7 @@ class FetchRoomsUseCase
 }
 
 // ---------------------------------------------------------------------------
-// PRESENTATION LAYER — EVENTS (you may modify/add)
+// EVENTS
 // ---------------------------------------------------------------------------
 
 sealed class RoomListEvent extends Equatable {
@@ -225,7 +187,7 @@ final class LoadMoreRoomsEvent extends RoomListEvent {
 }
 
 // ---------------------------------------------------------------------------
-// PRESENTATION LAYER — STATE (find and fix the bug)
+// STATE
 // ---------------------------------------------------------------------------
 
 class RoomListState extends Equatable {
@@ -236,6 +198,7 @@ class RoomListState extends Equatable {
   final int lastPage;
   final int popularIndex;
   final int globalIndex;
+  final bool isLoadingMore;
   final ScrollController scrollController;
 
   RoomListState({
@@ -246,6 +209,7 @@ class RoomListState extends Equatable {
     this.lastPage = -1,
     this.popularIndex = 0,
     this.globalIndex = 0,
+    this.isLoadingMore = false,
     ScrollController? scrollController,
   }) : scrollController = scrollController ?? ScrollController();
 
@@ -257,6 +221,7 @@ class RoomListState extends Equatable {
     int? lastPage,
     int? popularIndex,
     int? globalIndex,
+    bool? isLoadingMore,
   }) {
     return RoomListState(
       status: status ?? this.status,
@@ -264,27 +229,28 @@ class RoomListState extends Equatable {
       errorMessage: errorMessage ?? this.errorMessage,
       currentPage: currentPage ?? this.currentPage,
       lastPage: lastPage ?? this.lastPage,
-      // ⚠️ SUBTLE BUG: These two are swapped (mirrors real codebase bug)
-      popularIndex: globalIndex ?? this.popularIndex,
-      globalIndex: popularIndex ?? this.globalIndex,
+      popularIndex: popularIndex ?? this.popularIndex,
+      globalIndex: globalIndex ?? this.globalIndex,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       scrollController: scrollController,
     );
   }
 
   @override
   List<Object?> get props => [
-        status,
-        rooms,
-        errorMessage,
-        currentPage,
-        lastPage,
-        popularIndex,
-        globalIndex,
-      ];
+    status,
+    rooms,
+    errorMessage,
+    currentPage,
+    lastPage,
+    popularIndex,
+    globalIndex,
+    isLoadingMore,
+  ];
 }
 
 // ---------------------------------------------------------------------------
-// PRESENTATION LAYER — BLOC (fix bugs and complete implementation)
+// BLOC
 // ---------------------------------------------------------------------------
 
 class RoomListBloc extends Bloc<RoomListEvent, RoomListState> {
@@ -296,42 +262,87 @@ class RoomListBloc extends Bloc<RoomListEvent, RoomListState> {
   }
 
   Future<void> _onFetchRooms(
-    FetchRoomsEvent event,
-    Emitter<RoomListState> emit,
-  ) async {
-    // BUG 1: Doesn't emit loading state before making API call
-    // BUG 2: Always passes page: 1, doesn't reset pagination state
+      FetchRoomsEvent event,
+      Emitter<RoomListState> emit,
+      ) async {
+    emit(state.copyWith(
+      status: RequestState.loading,
+      errorMessage: '',
+      currentPage: 1,
+      lastPage: -1,
+      isLoadingMore: false,
+      rooms: const [],
+    ));
 
-    final result = await _fetchRoomsUC(RoomParams(page: 1));
+    final result = await _fetchRoomsUC(const RoomParams(page: 1));
+
     result.fold(
-      (left) => emit(state.copyWith(
-        status: RequestState.error,
-        // BUG 3: Doesn't store the error message
-      )),
-      (right) => emit(state.copyWith(
-        // BUG 4: Doesn't use handleLoadedResponse — always sets loaded even if empty
-        status: RequestState.loaded,
-        rooms: right.data,
-        // BUG 5: Doesn't store pagination metadata (lastPage)
-      )),
+          (left) {
+        emit(state.copyWith(
+          status: handleErrorResponse(left),
+          errorMessage: NetworkExceptions.getErrorMessage(left),
+          isLoadingMore: false,
+        ));
+      },
+          (right) {
+        final rooms = right.data ?? [];
+        final pagination = right.paginates;
+
+        emit(state.copyWith(
+          status: handleLoadedResponse(rooms),
+          rooms: rooms,
+          currentPage: pagination?.currentPage ?? 1,
+          lastPage: pagination?.lastPage ?? 1,
+          errorMessage: '',
+          isLoadingMore: false,
+        ));
+      },
     );
   }
 
   Future<void> _onLoadMore(
-    LoadMoreRoomsEvent event,
-    Emitter<RoomListState> emit,
-  ) async {
-    // TODO: Implement pagination
-    // 1. Check if we've reached the last page
-    // 2. Increment currentPage
-    // 3. Fetch next page
-    // 4. Merge results using handlePaginationResponse
-    // 5. Update state with merged list and new pagination info
+      LoadMoreRoomsEvent event,
+      Emitter<RoomListState> emit,
+      ) async {
+    if (state.status != RequestState.loaded) return;
+    if (state.isLoadingMore) return;
+    if (state.lastPage != -1 && state.currentPage >= state.lastPage) return;
+
+    final nextPage = state.currentPage + 1;
+
+    emit(state.copyWith(isLoadingMore: true));
+
+    final result = await _fetchRoomsUC(RoomParams(page: nextPage));
+
+    result.fold(
+          (left) {
+        emit(state.copyWith(
+          isLoadingMore: false,
+          errorMessage: NetworkExceptions.getErrorMessage(left),
+        ));
+      },
+          (right) {
+        final mergedRooms = handlePaginationResponse<RoomEntity>(
+          result: right.data,
+          currentList: state.rooms,
+          currentPage: nextPage,
+        );
+
+        emit(state.copyWith(
+          status: handleLoadedResponse(mergedRooms),
+          rooms: mergedRooms,
+          currentPage: right.paginates?.currentPage ?? nextPage,
+          lastPage: right.paginates?.lastPage ?? state.lastPage,
+          isLoadingMore: false,
+          errorMessage: '',
+        ));
+      },
+    );
   }
 }
 
 // ---------------------------------------------------------------------------
-// PRESENTATION LAYER — UI (add buildWhen and scroll listener)
+// UI
 // ---------------------------------------------------------------------------
 
 class RoomListPage extends StatefulWidget {
@@ -350,12 +361,21 @@ class _RoomListPageState extends State<RoomListPage> {
     _bloc = RoomListBloc(FetchRoomsUseCase());
     _bloc.add(const FetchRoomsEvent());
 
-    // TODO [Mid+]: Add scroll listener for infinite scroll
-    // Use handleScrollListener to trigger LoadMoreRoomsEvent
+    _bloc.state.scrollController.addListener(() {
+      handleScrollListener(
+        controller: _bloc.state.scrollController,
+        currentPage: _bloc.state.currentPage,
+        lastPage: _bloc.state.lastPage,
+        fun: () {
+          _bloc.add(const LoadMoreRoomsEvent());
+        },
+      );
+    });
   }
 
   @override
   void dispose() {
+    _bloc.state.scrollController.dispose();
     _bloc.close();
     super.dispose();
   }
@@ -366,8 +386,11 @@ class _RoomListPageState extends State<RoomListPage> {
       appBar: AppBar(title: const Text('Rooms')),
       body: BlocBuilder<RoomListBloc, RoomListState>(
         bloc: _bloc,
-        // TODO [Mid+]: Add buildWhen to prevent unnecessary rebuilds
-        // Only rebuild when status or rooms list changes
+        buildWhen: (previous, current) {
+          return previous.status != current.status ||
+              previous.rooms != current.rooms ||
+              previous.isLoadingMore != current.isLoadingMore;
+        },
         builder: (context, state) {
           switch (state.status) {
             case RequestState.idle:
@@ -379,9 +402,11 @@ class _RoomListPageState extends State<RoomListPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(state.errorMessage.isEmpty
-                        ? 'Something went wrong'
-                        : state.errorMessage),
+                    Text(
+                      state.errorMessage.isEmpty
+                          ? 'Something went wrong'
+                          : state.errorMessage,
+                    ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () => _bloc.add(const FetchRoomsEvent()),
@@ -404,8 +429,18 @@ class _RoomListPageState extends State<RoomListPage> {
                 },
                 child: ListView.builder(
                   controller: state.scrollController,
-                  itemCount: state.rooms.length,
+                  itemCount:
+                  state.rooms.length + (state.isLoadingMore ? 1 : 0),
                   itemBuilder: (context, index) {
+                    if (index >= state.rooms.length) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+
                     final room = state.rooms[index];
                     return ListTile(
                       leading: CircleAvatar(
@@ -425,36 +460,27 @@ class _RoomListPageState extends State<RoomListPage> {
 }
 
 // ===========================================================================
-// SENIOR EXERCISE: Review this code and identify the anti-pattern.
-// Write a short answer (no code needed) explaining:
-// 1. What's wrong with this BLoC?
-// 2. What problems does this cause?
-// 3. How would you refactor it? (describe the split, not full code)
+// SENIOR EXERCISE ANSWER (written answer only)
 // ===========================================================================
 
 class FetchAllDataBloc extends Bloc<dynamic, dynamic> {
   FetchAllDataBloc(
-    // 15 use case dependencies — each handles a different concern:
-    this._fetchMyDataUC,           // User profile data
-    this._fetchUserDataUC,         // Other user's data
-    this._initPusherUC,            // Pusher WebSocket init
-    this._subscribeToChatUC,       // Chat channel subscription
-    this._subscribeToMessagesUC,   // Message channel subscription
-    this._listenToBannersUC,       // Gift/game banner events
-    this._listenToGamesUC,         // Game channel events
-    this._subscribeCounterUC,      // Unread message counter
-    this._fetchConfigUC,           // App configuration
-    this._fetchCountriesUC,        // Country list for filters
-    this._updateFCMTokenUC,        // Firebase messaging token
-    this._fetchBadgesUC,           // User badges
-    this._fetchLevelDataUC,        // User level/XP data
-    this._initAnalyticsUC,         // Analytics initialization
-    this._fetchWalletUC,           // Wallet/coins balance
-  ) : super(null) {
-    // Handles: user data, pusher, banners, games, config, badges,
-    // level data, analytics, wallet, FCM, countries, chat, messages,
-    // counter, and more...
-  }
+      this._fetchMyDataUC,
+      this._fetchUserDataUC,
+      this._initPusherUC,
+      this._subscribeToChatUC,
+      this._subscribeToMessagesUC,
+      this._listenToBannersUC,
+      this._listenToGamesUC,
+      this._subscribeCounterUC,
+      this._fetchConfigUC,
+      this._fetchCountriesUC,
+      this._updateFCMTokenUC,
+      this._fetchBadgesUC,
+      this._fetchLevelDataUC,
+      this._initAnalyticsUC,
+      this._fetchWalletUC,
+      ) : super(null);
 
   final dynamic _fetchMyDataUC;
   final dynamic _fetchUserDataUC;
@@ -472,3 +498,31 @@ class FetchAllDataBloc extends Bloc<dynamic, dynamic> {
   final dynamic _initAnalyticsUC;
   final dynamic _fetchWalletUC;
 }
+
+// ===========================================================================
+// Written Answer:
+// The anti-pattern here is a God Bloc / Mega Bloc.
+// It owns too many unrelated responsibilities such as profile, chat,
+// messages, banners, games, config, analytics, wallet, FCM, and countries.
+//
+// Problems:
+// - Violates single responsibility principle
+// - Hard to test and maintain
+// - Causes tight coupling between unrelated features
+// - Makes debugging and state reasoning harder
+// - Increases regression risk
+//
+// Refactor:
+// Split it into smaller feature-focused blocs/cubits/services, such as:
+// - ProfileCubit
+// - ChatConnectionBloc
+// - MessagesBloc
+// - BannerCubit
+// - GamesCubit
+// - ConfigCubit
+// - WalletCubit
+// - NotificationToken service/cubit
+//
+// App startup can be coordinated by a lightweight AppBootstrapBloc
+// or app initializer layer.
+// ===========================================================================

@@ -1,34 +1,9 @@
-// =============================================================================
-// EXERCISE 1: UI & Layout — "Room Card Widget"
-// Time: 30 minutes
-// =============================================================================
-//
-// SCENARIO:
-// You're building a social/live-streaming app. The home screen shows a list
-// of active rooms. Each room is displayed as a card with the room's cover image,
-// name, intro text, visitor count, country flag, and status icons.
-//
-// The previous developer left a broken implementation. Your job is to fix it
-// and improve it.
-//
-// TASKS:
-// 1. [All Levels] Fix the layout bugs (overflow, alignment, null handling)
-// 2. [Mid+] Add a shimmer loading state for the image
-// 3. [Mid+] Make the card responsive (don't use hardcoded pixel values)
-// 4. [Senior] Add const constructors throughout where possible
-// 5. [Senior] Create a reusable CachedImage widget with loading/error/success states
-// 6. [Senior] Add RepaintBoundary where appropriate
-//
-// RULES:
-// - You may add any Flutter/Dart packages you need (shimmer, cached_network_image, etc.)
-// - Focus on code quality, not just making it "work"
-// - Consider edge cases (null data, long text, missing images)
-// =============================================================================
-
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 
 // ---------------------------------------------------------------------------
-// DATA MODEL (do not modify)
+// DATA MODEL (unchanged)
 // ---------------------------------------------------------------------------
 
 class RoomEntity {
@@ -37,7 +12,7 @@ class RoomEntity {
   final String? roomIntro;
   final String? coverUrl;
   final int visitorsCount;
-  final String? countryFlag; // emoji flag like "🇺🇸"
+  final String? countryFlag;
   final bool isLive;
   final bool hasPassword;
   final String? ownerName;
@@ -57,10 +32,6 @@ class RoomEntity {
   });
 }
 
-// ---------------------------------------------------------------------------
-// SAMPLE DATA (do not modify)
-// ---------------------------------------------------------------------------
-
 final sampleRooms = [
   RoomEntity(
     id: 1,
@@ -77,8 +48,8 @@ final sampleRooms = [
   RoomEntity(
     id: 2,
     roomName: 'Chill Zone',
-    roomIntro: null, // No intro set
-    coverUrl: null, // No cover image
+    roomIntro: null,
+    coverUrl: null,
     visitorsCount: 0,
     countryFlag: '🇹🇷',
     isLive: false,
@@ -88,167 +59,344 @@ final sampleRooms = [
   RoomEntity(
     id: 3,
     roomName: 'Gaming Arena - Competitive Matches Every Hour - Join Now!',
-    roomIntro: 'Competitive gaming room with hourly tournaments and prizes for top players',
+    roomIntro:
+    'Competitive gaming room with hourly tournaments and prizes for top players',
     coverUrl: 'https://picsum.photos/200/201',
     visitorsCount: 56789,
-    countryFlag: null, // No country
+    countryFlag: null,
     isLive: true,
     hasPassword: false,
   ),
 ];
 
 // ---------------------------------------------------------------------------
-// BROKEN IMPLEMENTATION (fix this)
+// SCREEN
 // ---------------------------------------------------------------------------
 
 class RoomCardList extends StatelessWidget {
+  const RoomCardList({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Rooms')),
-      body: ListView(
-        // BUG: Should use ListView.builder for performance
-        children: sampleRooms.map((room) => RoomCard(room: room)).toList(),
+      appBar: AppBar(
+        title: const Text('Rooms'),
+      ),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: sampleRooms.length,
+        itemBuilder: (context, index) {
+          final room = sampleRooms[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: RoomCard(room: room),
+          );
+        },
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// ROOM CARD
+// ---------------------------------------------------------------------------
 
 class RoomCard extends StatelessWidget {
   final RoomEntity room;
 
-  // BUG: Missing const constructor
-  RoomCard({required this.room});
+  const RoomCard({
+    super.key,
+    required this.room,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      // BUG: Hardcoded margin and dimensions
-      margin: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      padding: EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey,
-            blurRadius: 2,
-            offset: Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // --- Cover Image ---
-          // BUG: No loading state, no error handling, no placeholder
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              image: DecorationImage(
-                // BUG: Will crash if coverUrl is null
-                image: NetworkImage(room.coverUrl!),
-                fit: BoxFit.cover,
-              ),
+    final theme = Theme.of(context);
+
+    return RepaintBoundary(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 10,
+              offset: Offset(0, 4),
             ),
-            child: room.isLive
-                ? Positioned(
-                    // BUG: Positioned outside of Stack
-                    top: 0,
-                    left: 0,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'LIVE',
-                        style: TextStyle(color: Colors.white, fontSize: 8),
-                      ),
-                    ),
-                  )
-                : null,
-          ),
-          // BUG: No spacing between image and text
-          // --- Room Info ---
-          Column(
-            // BUG: Column not wrapped in Expanded, will overflow
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Row 1: Room Name + Visitor Count
-              Row(
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CachedRoomImage(
+              imageUrl: room.coverUrl,
+              isLive: room.isLive,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // BUG: Text will overflow on long names
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          room.roomName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.black,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _VisitorCount(count: room.visitorsCount),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
                   Text(
-                    room.roomName,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
+                    (room.roomIntro?.trim().isNotEmpty ?? false)
+                        ? room.roomIntro!.trim()
+                        : 'No description available',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.greyText,
+                      height: 1.35,
                     ),
                   ),
-                  // BUG: No spacing
-                  _VisitorCount(count: room.visitorsCount),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (room.countryFlag != null &&
+                          room.countryFlag!.trim().isNotEmpty)
+                        Text(
+                          room.countryFlag!,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      if (room.hasPassword)
+                        const _StatusChip(
+                          icon: Icons.lock,
+                          label: 'Private',
+                        ),
+                      if ((room.ownerName?.trim().isNotEmpty ?? false))
+                        Text(
+                          'by ${room.ownerName!.trim()}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.greyText,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
-              // Row 2: Room Intro
-              Text(
-                // BUG: Will show "null" if roomIntro is null
-                room.roomIntro.toString(),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFFa5a7a4),
-                ),
-                // BUG: No maxLines or overflow handling
-              ),
-              // Row 3: Country + Lock icon
-              Row(
-                children: [
-                  // BUG: Will show "null" text if no country flag
-                  Text(room.countryFlag.toString(), style: TextStyle(fontSize: 16)),
-                  // BUG: No spacing
-                  if (room.hasPassword)
-                    Icon(Icons.lock, size: 14, color: Color(0xFF32e5ac)),
-                ],
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
+// ---------------------------------------------------------------------------
+// REUSABLE CACHED IMAGE WIDGET
+// ---------------------------------------------------------------------------
+
+class CachedRoomImage extends StatelessWidget {
+  final String? imageUrl;
+  final bool isLive;
+
+  const CachedRoomImage({
+    super.key,
+    required this.imageUrl,
+    required this.isLive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const double size = 88;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: _buildImage(),
+            ),
+            if (isLive)
+              Positioned(
+                top: 6,
+                left: 6,
+                child: Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImage() {
+    if (imageUrl == null || imageUrl!.trim().isEmpty) {
+      return _ImagePlaceholder(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: Colors.grey.shade500,
+          size: 28,
+        ),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: imageUrl!,
+      fit: BoxFit.cover,
+      placeholder: (context, url) => Shimmer.fromColors(
+        baseColor: AppColors.shimmerBase,
+        highlightColor: AppColors.shimmerHighlight,
+        child: const _ImagePlaceholder(),
+      ),
+      errorWidget: (context, url, error) => _ImagePlaceholder(
+        child: Icon(
+          Icons.broken_image_outlined,
+          color: Colors.grey.shade500,
+          size: 28,
+        ),
+      ),
+    );
+  }
+}
+
+class _ImagePlaceholder extends StatelessWidget {
+  final Widget? child;
+
+  const _ImagePlaceholder({this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.grey.shade200,
+      alignment: Alignment.center,
+      child: child,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// VISITOR COUNT
+// ---------------------------------------------------------------------------
+
 class _VisitorCount extends StatelessWidget {
   final int count;
 
-  // BUG: Missing const, missing key
-  _VisitorCount({required this.count});
+  const _VisitorCount({
+    required this.count,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.visibility, size: 12, color: Colors.grey),
-        SizedBox(width: 2),
+        const Icon(
+          Icons.visibility_outlined,
+          size: 14,
+          color: Colors.grey,
+        ),
+        const SizedBox(width: 4),
         Text(
-          // BUG: Should format large numbers (1234 → 1.2K)
-          count.toString(),
-          style: TextStyle(
-            fontSize: 10,
+          _formatCount(count),
+          style: const TextStyle(
+            fontSize: 11,
             color: Colors.grey,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
     );
   }
+
+  String _formatCount(int value) {
+    if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(value % 1000000 == 0 ? 0 : 1)}M';
+    }
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
+    }
+    return value.toString();
+  }
 }
 
 // ---------------------------------------------------------------------------
-// BONUS: Color constants (for reference)
+// STATUS CHIP
+// ---------------------------------------------------------------------------
+
+class _StatusChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _StatusChip({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: AppColors.primary,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// COLORS
 // ---------------------------------------------------------------------------
 
 class AppColors {

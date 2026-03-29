@@ -1,0 +1,42 @@
+{
+  "metadata": {
+    "generated_at": "2026-03-29T04:11:07.335Z",
+    "assessment_version": "1.0",
+    "company": "UTD Software"
+  },
+  "about_you": {
+    "full_name": "Mohamed Saleh El Saeed Abdullah",
+    "email": "dev.mohamedsaleh11@gmail.com",
+    "github_username": "devmohamedsaleh",
+    "flutter_experience": "2-3",
+    "total_dev_experience": "1-3"
+  },
+  "skills_self_assessment": {
+    "bloc_flutter_bloc": 5,
+    "clean_architecture": 5,
+    "firebase": 5,
+    "cicd_devops": 4,
+    "testing": 4,
+    "realtime_websocket": 4,
+    "performance_devtools": 4
+  },
+  "technical_knowledge": {
+    "q8_complex_feature": "I built a Flutter notes and content management feature that combined local storage, API integration, and structured state management. The main challenge was keeping the UI responsive while handling create, update, delete, and sync flows without mixing business logic into the widgets. I solved that by separating the app into layers, using models and a clear data flow, and keeping state changes isolated through BLoC/Cubit. This made the feature easier to maintain, test, and extend later.",
+    "q9_stateful_vs_bloc": "I use StatefulWidget when the state is simple, local to one screen, and mostly UI-related, such as toggles, text field visibility, tab selection, or animation control. I use BLoC when the feature has async operations, multiple UI states, API calls, pagination, validation, or needs to be shared across widgets or screens. My rule is: if the state affects only one widget and stays simple, StatefulWidget is enough; if the logic grows or needs separation and testability, I move to BLoC. This keeps the codebase cleaner and avoids overengineering small features.",
+    "q10_code_output": "It prints 4 and then true. list2 = list1 does not create a copy; it creates another reference to the same list object in memory. So when list2.add(4) is called, the original list is modified as well, which makes list1.length become 4. Since both variables point to the same object, identical(list1, list2) returns true",
+    "q11_bloc_bug": "The issue is that the handler emits twice using state + 1, but after the first emit the second line still reads from the updated state flow in a way that is easy to misunderstand and is not a clean way to express intent. If the goal is to add 2, I would emit once with state + 2, or compute the next value explicitly and emit that once. In general, a single clear state transition is easier to reason about, test, and maintain than multiple sequential emits for one logical action",
+    "q12_const_sizedbox": "const SizedBox() is a compile-time constant, so Flutter can reuse the same widget instance instead of creating a new one on every rebuild. SizedBox() without const creates a new object each time the widget tree rebuilds. The rendering result is usually the same, but const reduces unnecessary allocations and helps Flutter optimize rebuilds. It is a small optimization, but it becomes valuable when used consistently across frequently rebuilt widget trees",
+    "q13_friday_bug": "Step 1: Confirm the issue quickly using logs, monitoring, crash reports, and reproduction steps.\nStep 2: Assess impact: how many users are affected, which platforms are affected, and whether there is a workaround.\nStep 3: Communicate immediately to the team and stakeholders with a short status update and severity level.\nStep 4: Contain the issue if possible, for example by rolling back, disabling a feature flag, or stopping a bad release from spreading further.\nStep 5: Find the root cause, prepare the smallest safe fix, and verify it with focused testing.\nStep 6: Release the fix, monitor production closely, and document the incident with lessons learned and follow-up actions"
+  },
+  "how_you_work": {
+    "q14_architecture_disagreement": "I once disagreed with keeping too much unrelated feature logic inside a single BLoC because it was making the state hard to understand and increasing rebuild scope. My concern was that this would slow down debugging and make future changes riskier, especially as the screen grew. I proposed splitting the responsibilities into smaller feature-focused blocs and selectors, and after discussing trade-offs we adopted that direction incrementally instead of rewriting everything at once. The result was clearer ownership, smaller rebuild areas, and easier testing",
+    "q15_staying_current": "I stay current by following the official Flutter and Dart release notes, checking package changelogs before upgrades, and regularly reviewing updates to best practices around state management, performance, and testing. I also learn a lot from building small experiments, reading source code when needed, and comparing different implementation approaches in real projects. On active projects, I rely on lints, code reviews, and post-release feedback to keep my habits aligned with production-quality standards. I try to balance learning new features with keeping the codebase stable and maintainable",
+    "q16_code_review": "My code review approach is to first understand the purpose of the change, then review correctness, architecture fit, readability, edge cases, performance, and test coverage. I look for clear naming, proper separation of concerns, predictable state flow, safe async handling, and whether the solution matches the existing codebase style. A good PR is focused, easy to review, includes enough context, avoids unrelated changes, and makes the reason for the implementation clear. I also value PRs that are simple, testable, and easy to maintain after the original author moves on",
+    "q17_ai_usage": "I used AI as a support tool during the assessment for brainstorming, reviewing alternative refactoring approaches, and improving the clarity of some written explanations. I did not use it blindly; I still reviewed the code, adjusted solutions to fit the project structure, and made sure I understood the reasoning behind each change before using it. I treated AI as a helper for faster iteration, not as a replacement for debugging or engineering judgment. I aimed to keep the final submission consistent with how I would work in a real development environment"
+  },
+  "submissions": {
+    "q18_video_url": null,
+    "q19_github_repo_url": "https://github.com/devmohamedsaleh/flutter-developer-assessment",
+    "q20_anything_else": "I focused on completing the first five exercises with more depth and quality rather than rushing all tasks. My goal was to keep the solutions clear, maintainable, and aligned with real Flutter development practices. Thank you for the opportunity."
+  }
+}
