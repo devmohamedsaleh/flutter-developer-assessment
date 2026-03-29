@@ -20,8 +20,5 @@ I focused on completing the first five exercises with stronger depth, cleaner re
 ## Questionnaire
 The generated questionnaire answers file is included in the repository under the appropriate answers path.
 
-## Submission
-Repository URL:
-[PASTE YOUR REPOSITORY URL HERE]
 
 Thank you for reviewing my submission.
